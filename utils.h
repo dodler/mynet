@@ -16,8 +16,8 @@ struct ConvBnRelu{
   int dilationX=1,dilationY=1;
   int inChannels=-1,outChannels=-1;
   int kh,kc,kw,kd;
-  bool doBias,doRelu,doBn;
-  int num_features;
+  bool doBias=false,doRelu=false,doBn=false;
+  int num_features=-1;
 
   vector<float> convWeight;
   vector<float> biasWeight;

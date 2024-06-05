@@ -51,6 +51,7 @@ void read_ckpt(const char * path, Tensor & tensor){
   tensor.w=header[5];
   int tensor_size=tensor.b*tensor.c*tensor.h*tensor.w;
   copy_vector_float(buf, tensor.data, 256, tensor_size); 
+  in.close();
 }
 
 int load_conv_bn_relu_layer(ConvBnRelu & layer, int offset, const vector<int> layer_header,vector<unsigned char> & buf){
@@ -61,8 +62,8 @@ int load_conv_bn_relu_layer(ConvBnRelu & layer, int offset, const vector<int> la
   layer.kw = layer_header[4];
   layer.strideX = layer_header[5];
   layer.strideY = layer_header[6];
-  layer.padX = layer_header[7];
-  layer.padY = layer_header[8];
+  layer.padX = layer.padW = layer_header[7];
+  layer.padY = layer.padH = layer_header[8];
   layer.doBias= layer_header[9];
   layer.group= layer_header[10];
   layer.dilationX = layer_header[11];
@@ -74,13 +75,22 @@ int load_conv_bn_relu_layer(ConvBnRelu & layer, int offset, const vector<int> la
   layer.num_features=layer.kd;
 
   int tensor_size=layer.kd*layer.kc*layer.kh*layer.kw;
-
+  cout << "loading conv weight " << tensor_size << endl;
   copy_vector_float(buf, layer.convWeight, offset, tensor_size); 
+  for(int i = 0;i<10; i++){
+    cout << layer.convWeight[i] << " ";
+  }
+  cout << endl;
+  cout << "conv weight load ok " << endl;
   offset += tensor_size;
+  cout << "layer do bias " << layer.doBias << endl;
   if (layer.doBias){
-    copy_vector_float(buf, layer.biasWeight, offset, layer.kd); 
+    cout << "loading bias " << layer.kd << endl;
+    copy_vector_float(buf, layer.biasWeight, offset, layer.kd);
+    cout << "load bias ok" << endl; 
     offset += layer.kd;
   }
+  cout << "return offset " << endl;
 
   vector<int> next_header;
   copy_vector_int(buf, next_header, offset, H_LEN);
@@ -109,7 +119,7 @@ int load_conv_bn_relu_layer(ConvBnRelu & layer, int offset, const vector<int> la
   return offset;
 }
 
-void read_net(const char * path){
+void read_net(const char * path, ConvBnRelu & conv){
   ifstream in(path, ios::binary);
   in.unsetf(ios::skipws);
   vector<unsigned char> buf; 
@@ -136,10 +146,14 @@ void read_net(const char * path){
     copy_vector_int(buf, layer_meta, offset, H_LEN);
     offset+=H_LEN;
     if (layer_meta[0] == 1){ // convolution
-      ConvBnRelu conv;
       offset = load_conv_bn_relu_layer(conv, offset, layer_meta, buf);
+      cout << "load conv bn relu ok " << endl;
+      i=120; // fixme, return number of loaded layers? 
     }
     
   }
+
+  in.close();
+  cout << "read net ok " << endl; 
 }
 

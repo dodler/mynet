@@ -55,7 +55,9 @@ void conv_bn_relu(const float * src, int batch, int srcC, int srcH, int srcW,
     int kernelY, int kernelX, int dilationY, int dilationX,
     int strideY, int strideX, int padY, int padX, int padH, int padW, int group,
     const float * weight, const float * bias, float * dst, int dstC, float * buf,
-    const Tensor & bn_mean, const Tensor & bn_var, const Tensor & bn_alpha, const Tensor & bn_beta
+    const vector<float> & bn_mean, const vector<float> & bn_var, 
+    const vector<float> & bn_alpha, const vector<float> & bn_beta,
+    bool do_relu
     )
 {
   int dstH = (srcH + padY + padH - (dilationY * (kernelY - 1) + 1)) / strideY + 1;
@@ -70,17 +72,24 @@ void conv_bn_relu(const float * src, int batch, int srcC, int srcH, int srcW,
       strideY, strideX, padY, padX, padH, padW, buf);
     for (int g = 0; g < group; ++g)
       gemm_nn(M, N, K, 1, weight + M * K * g, K, 0, buf + N * K * g, N, dst + M * N * g, N);
-    if (bias != nullptr) // conv bn relu fused
+
     for (int i = 0; i < dstC; ++i){
+      float mean=bn_mean[i];
+      float var = sqrt(bn_var[i]+eps);
+      float alpha = bn_alpha[i];
+      float beta = bn_beta[i];
       for (int j = 0; j < N; ++j){
         float x = dst[i*N + j];
         if (bias != nullptr){
 	  x+=bias[i];
 	}
 	if (&bn_mean != nullptr){
-          x = (x-bn_mean.data[i]) / sqrt(bn_var.data[i]+eps); 
-	  x = x * bn_alpha.data[i];
-	  x = x + bn_beta.data[i];
+          x = (x-mean) / var; 
+	  x = x * alpha;
+	  x = x + beta;
+	}
+	if (do_relu == 1){
+	  x=relu(x);
 	}
 	dst[i*N+j]=x;
       }
@@ -91,38 +100,45 @@ void conv_bn_relu(const float * src, int batch, int srcC, int srcH, int srcW,
 }
 
 int main(){
-  /*
-  Tensor t1;
-  read_ckpt("test.bin", t1);
-  Tensor t2;
-  read_ckpt("test_img.bin", t2);
+  //Tensor t1;
+  //read_ckpt("test.bin", t1);
+  Tensor img;
+  read_ckpt("test_img.bin", img);
+  cout << "img " << endl;
+  for (int i = 0;i<20;i++){
+    cout << img.data[i] << " ";
+  }
+  cout << endl;
+
+  ConvBnRelu layer1;
+  read_net("r18.bin", layer1);
 
   vector<float> buf;
   vector<float> dst;
 
-  int padX=0,padY=0,strideX=1, strideY=1,padH=0,padW=0,group=1;
-  int dilationX=1,dilationY=1,kernelX=t1.w,kernelY=t1.h;
-
-  int dstH = (t2.h+padY+padH-( dilationY*(kernelY-1)+1 ) )  / strideY + 1; 
-  int dstW = (t2.w+padX+padW-( dilationX*(kernelX-1)+1 ) )  / strideX + 1;
-  int dstC=t1.b;
+  int dstH = (img.h+layer1.padY+layer1.padH-( layer1.dilationY*(layer1.kh-1)+1 ) )  / layer1.strideY + 1; 
+  int dstW = (img.w+layer1.padX+layer1.padW-( layer1.dilationX*(layer1.kw-1)+1 ) )  / layer1.strideX + 1;
+  int dstC=layer1.kd;
   cout << "dstH " << dstH << " dstW " << dstW << " dstC " << dstC <<  endl;
-  int dst_size=dstC*t2.b*dstH*dstW;
-  int buf_size=(t1.w+t2.w)*(t2.h+t2.h)*dstC;
+  int dst_size=dstC*img.b*dstH*dstW;
+  int buf_size=(layer1.kw+img.w)*(layer1.kh+img.h)*dstC;
   buf.reserve(buf_size);
   dst.reserve(dst_size);
   cout << "buf size " << buf_size << " dst size " << dst_size << endl; 
+  cout << "layer do relu " << layer1.doRelu << endl;
 
-  conv_bn_relu(t2.data.data(), t2.b, t2.c, t2.h, t2.w,
-      kernelY, kernelX, dilationY,dilationX,
-      strideY, strideX,padY, padX,padH,padW,
-      group,t1.data.data(),  nullptr, 
-      dst.data(), dstC, buf.data(), 
-      nullptr, nullptr, nullptr, nullptr);
-  for (int i = 0; i<20; i++){
+  conv_bn_relu(img.data.data(), img.b, img.c, img.h, img.w,
+		  layer1.kh, layer1.kw, layer1.dilationY, layer1.dilationX, 
+		  layer1.strideY, layer1.strideX, 
+		  layer1.padY, layer1.padX, layer1.padH, layer1.padW, 
+		  layer1.group, layer1.convWeight.data(), layer1.biasWeight.data(),
+		  dst.data(), dstC,  buf.data(), 
+		  layer1.bnRunningMean, layer1.bnRunningVar,
+		  layer1.bnWeight, layer1.bnBias, layer1.doRelu 
+		  );
+  for (int i = 0; i<256; i++){
     cout << dst[i] << " ";
   }
   cout << endl;
-  */
-  read_net("r18.bin");
+
 }
