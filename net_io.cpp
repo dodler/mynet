@@ -54,7 +54,13 @@ void read_ckpt(const char * path, Tensor & tensor){
   in.close();
 }
 
-int load_conv_bn_relu_layer(ConvBnRelu & layer, int offset, const vector<int> layer_header,vector<unsigned char> & buf){
+int load_conv_bn_relu_layer(ConvBnRelu & layer, int offset, vector<unsigned char> & buf){
+  vector<int> layer_header;
+  copy_vector_int(buf, layer_header, offset, H_LEN);
+  if (layer_header[0] != 1){
+    cout << "wrong header for conv, got " << layer_header[0] << " expected 1 "  << endl;
+  }
+  offset+=H_LEN;
 
   layer.inChannels=layer_header[1];
   layer.outChannels=layer_header[2];
@@ -75,22 +81,12 @@ int load_conv_bn_relu_layer(ConvBnRelu & layer, int offset, const vector<int> la
   layer.num_features=layer.kd;
 
   int tensor_size=layer.kd*layer.kc*layer.kh*layer.kw;
-  cout << "loading conv weight " << tensor_size << endl;
   copy_vector_float(buf, layer.convWeight, offset, tensor_size); 
-  for(int i = 0;i<10; i++){
-    cout << layer.convWeight[i] << " ";
-  }
-  cout << endl;
-  cout << "conv weight load ok " << endl;
   offset += tensor_size;
-  cout << "layer do bias " << layer.doBias << endl;
   if (layer.doBias){
-    cout << "loading bias " << layer.kd << endl;
     copy_vector_float(buf, layer.biasWeight, offset, layer.kd);
-    cout << "load bias ok" << endl; 
     offset += layer.kd;
   }
-  cout << "return offset " << endl;
 
   vector<int> next_header;
   copy_vector_int(buf, next_header, offset, H_LEN);
@@ -119,7 +115,30 @@ int load_conv_bn_relu_layer(ConvBnRelu & layer, int offset, const vector<int> la
   return offset;
 }
 
-void read_net(const char * path, ConvBnRelu & conv){
+int load_max_pool(MaxPool & layer, int offset, vector<unsigned char> & buf ){
+  vector<int> layer_header;
+  copy_vector_int(buf, layer_header, offset, H_LEN);
+  cout << "loading maxpool " << layer_header[5] << " expected 102 "  << endl;
+  if (layer_header[0] != 4){
+    return offset;
+  }
+  offset+=H_LEN;
+
+  layer.kernel_size=layer_header[1];
+  layer.stride=layer_header[2];
+  layer.padding=layer_header[3];
+  layer.dilation=layer_header[4];
+
+  return offset;
+}
+void load_avg_pool(AvgPool & layer, int offset, vector<unsigned char> & buf){}
+void load_linear(Linear & layer, int offset, vector<unsigned char> & buf){
+  vector<int> layer_header;
+  copy_vector_int(buf, layer_header, offset, H_LEN);
+  offset+=H_LEN;
+}
+
+void read_net(const char * path, Resnet18 & model){
   ifstream in(path, ios::binary);
   in.unsetf(ios::skipws);
   vector<unsigned char> buf; 
@@ -135,23 +154,40 @@ void read_net(const char * path, ConvBnRelu & conv){
     istream_iterator<unsigned char> ()
   );
 
+
+
   vector<int> net_meta;
   copy_vector_int(buf,net_meta, 0, H_LEN);
   int n_layers = net_meta[2];
 
   int offset=256;
   int i = 0;
-  while (i<n_layers){
-    vector<int> layer_meta;
-    copy_vector_int(buf, layer_meta, offset, H_LEN);
-    offset+=H_LEN;
-    if (layer_meta[0] == 1){ // convolution
-      offset = load_conv_bn_relu_layer(conv, offset, layer_meta, buf);
-      cout << "load conv bn relu ok " << endl;
-      i=120; // fixme, return number of loaded layers? 
-    }
-    
-  }
+  offset = load_conv_bn_relu_layer(model.conv1, offset,  buf);
+  offset = load_max_pool(model.pool1, offset, buf);
+
+  offset = load_conv_bn_relu_layer(model.l1_b0_conv1, offset, buf);
+  offset = load_conv_bn_relu_layer(model.l1_b0_conv2, offset, buf);
+  offset = load_conv_bn_relu_layer(model.l1_b1_conv1, offset, buf);
+  offset = load_conv_bn_relu_layer(model.l1_b1_conv2, offset, buf);
+
+  offset = load_conv_bn_relu_layer(model.l2_b0_conv1, offset, buf);
+  offset = load_conv_bn_relu_layer(model.l2_b0_conv2, offset, buf);
+  offset = load_conv_bn_relu_layer(model.l2_b0_conv3, offset, buf);
+  offset = load_conv_bn_relu_layer(model.l2_b1_conv1, offset, buf);
+  offset = load_conv_bn_relu_layer(model.l2_b1_conv2, offset, buf);
+
+  offset = load_conv_bn_relu_layer(model.l3_b0_conv1, offset, buf);
+  offset = load_conv_bn_relu_layer(model.l3_b0_conv2, offset, buf);
+  offset = load_conv_bn_relu_layer(model.l3_b0_conv3, offset, buf);
+  offset = load_conv_bn_relu_layer(model.l3_b1_conv1, offset, buf);
+  offset = load_conv_bn_relu_layer(model.l3_b1_conv2, offset, buf);
+
+  offset = load_conv_bn_relu_layer(model.l4_b0_conv1, offset, buf);
+  offset = load_conv_bn_relu_layer(model.l4_b0_conv2, offset, buf);
+  offset = load_conv_bn_relu_layer(model.l4_b0_conv3, offset, buf);
+  offset = load_conv_bn_relu_layer(model.l4_b1_conv1, offset, buf);
+  offset = load_conv_bn_relu_layer(model.l4_b1_conv2, offset, buf);
+
 
   in.close();
   cout << "read net ok " << endl; 
