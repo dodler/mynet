@@ -165,7 +165,7 @@ void maxpool(Tensor & input_tensor, MaxPool & layer, Tensor & output )
                   int sy = dy * layer.stride + ky * layer.dilation - layer.padding;
                   int sx = dx * layer.stride + kx * layer.dilation - layer.padding;
                   if (sy >= 0 && sy < srcH && sx >= 0 && sx < srcW){
-                    float val = src[((b*dc)*srcH + sy)*srcW + sx];
+                    float val = src[((b*srcC+dc)*srcH + sy)*srcW + sx];
 		    if (val > m){
 	              m=val;
 		    }
@@ -207,7 +207,9 @@ int main(){
   Tensor x2;
   maxpool(x1, model.pool1, x2);
   Tensor x3;
-  conv_bn_relu(x2_hat, model.l1_b0_conv1, x3);
+  conv_bn_relu(x2, model.l1_b0_conv1, x3);
+  Tensor x4;
+  conv_bn_relu(x3, model.l1_b0_conv2, x4);
 
   float delta = 0;
   for (int i = 0; i<x2_hat.data.size(); i++){
