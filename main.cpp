@@ -3,8 +3,11 @@
 #include "net_io.cpp"
 #include <cmath>
 #include "utils.h"
+#include <chrono>
 
 using namespace std;
+using namespace std::chrono;
+
 float relu(float value){
   return value > 0 ? value : 0;
 }
@@ -44,7 +47,7 @@ void im2col(const float * src, int srcC, int srcH, int srcW,
     }
   }
 }
-
+/*
 void gemm_nn(int M, int N, int K, float alpha, const float * A, int lda,
     float beta, const float * B, int ldb, float * C, int ldc)
 {
@@ -52,9 +55,29 @@ void gemm_nn(int M, int N, int K, float alpha, const float * A, int lda,
   {
     for (int j = 0; j < N; ++j)
     {
-      C[i*ldc + j] = beta;
+      int ind1=i*ldc+j;
+      C[ind1] = beta;
       for (int k = 0; k < K; ++k)
-        C[i*ldc + j] += alpha * A[i*lda + k] * B[k*ldb + j];
+        C[ind1] += alpha * A[i*lda + k] * B[k*ldb + j];
+    }
+  }
+}
+*/
+void gemm_nn(int M, int N, int K, float alpha, const float * A, int lda,
+    float beta, const float * B, int ldb, float * C, int ldc)
+{
+  for (int i = 0; i < M; ++i)
+  {
+    float * c = C + i*ldc;
+    for(int j = 0; j<N; ++j){
+      c[j]=0;
+    }
+    for(int k = 0; k<K;++k){
+      const float * b = B+k*ldb;
+      float a = A[i*lda+k];
+      for (int j = 0;  j<N; ++j){
+        c[j]+=a*b[j];
+      }
     }
   }
 }
@@ -282,6 +305,8 @@ int main(){
   Resnet18 model;
   read_net("r18.bin", model);
 
+  auto start = high_resolution_clock::now();
+
   Tensor x1;
   conv_bn_relu(img, model.conv1, x1);
   Tensor x2;
@@ -311,6 +336,10 @@ int main(){
   Tensor fc_out;
   linear(avg, model.fc, fc_out);
 
+  auto end = high_resolution_clock::now();
+  auto duration = duration_cast<microseconds>(end - start);
+
+  cout << "time elapsed microseconds " << duration.count() << endl;
 
   for (int i = 0; i<256; i+=1){
     cout << fc_out.data[i] << " ";
