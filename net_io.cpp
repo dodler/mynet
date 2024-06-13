@@ -135,7 +135,17 @@ void load_avg_pool(AvgPool & layer, int offset, vector<unsigned char> & buf){}
 void load_linear(Linear & layer, int offset, vector<unsigned char> & buf){
   vector<int> layer_header;
   copy_vector_int(buf, layer_header, offset, H_LEN);
+  if (layer_header[0] != 6){
+    cout << "load linear, bad layer " << endl;
+  }
   offset+=H_LEN;
+
+  layer.in_features=layer_header[1];
+  layer.out_features=layer_header[2];
+  int tensor_size=layer.in_features*layer.out_features;
+  copy_vector_float(buf, layer.weight, offset, tensor_size);
+  offset += tensor_size;
+  copy_vector_float(buf, layer.bias, offset, layer.out_features);
 }
 
 void read_net(const char * path, Resnet18 & model){
@@ -188,6 +198,11 @@ void read_net(const char * path, Resnet18 & model){
   offset = load_conv_bn_relu_layer(model.l4_b1_conv1, offset, buf);
   offset = load_conv_bn_relu_layer(model.l4_b1_conv2, offset, buf);
 
+  // some cheating
+  offset += H_LEN;
+  model.pool.size=2;
+  
+  load_linear(model.fc, offset, buf);  
 
   in.close();
   cout << "read net ok " << endl; 

@@ -45,9 +45,8 @@ struct AvgPool {
 };
 
 struct Linear{
-  public:
-    int in_features, out_features;
-    vector<float> weight, bias;
+  int in_features, out_features;
+  vector<float> weight, bias;
 };
 
 struct Resnet18{
